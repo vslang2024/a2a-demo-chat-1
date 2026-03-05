@@ -54,7 +54,7 @@ Redis Streams (Persistent Events)
 
 ```
 .
-├── booking_Server.py
+├── booking_server.py
 ├── langgraph_orchestrator.py
 ├── redis_stream.py
 ├── streamlit_app.py
@@ -131,7 +131,7 @@ uvicorn hotel_agent:app --port 8002 --reload
 ## Start Booking Orchestrator
 
 ```bash
-uvicorn booking_Server:app --port 8000 --reload
+uvicorn booking_server:app --port 8000 --reload
 ```
 
 ## Start Streamlit UI
