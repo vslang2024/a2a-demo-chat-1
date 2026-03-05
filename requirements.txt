@@ -1,0 +1,13 @@
+
+fastapi
+uvicorn
+streamlit
+redis
+python-dotenv
+requests
+langgraph
+langchain
+google-generativeai
+pydantic
+sse-starlette
+sseclient-py
