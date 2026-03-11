@@ -188,23 +188,35 @@ services:
     env_file: .env
     depends_on: [api, redis]
 bash
+```
 docker-compose up -d
+```
 🔧 Development Workflow
 bash
 # Install dev tools
+```
 pip install -r requirements-dev.txt
+```
 
 # Code quality
+```
 black .
 ruff check --fix .
 pre-commit install
+```
 
 # Run tests
+```
 pytest tests/ -v
+```
 
 # Debug SSE stream
+``` 
 curl "http://localhost:8000/sse/debug" | jq
+```
+
 📦 Requirements
+```
 text
 fastapi==0.115.0
 uvicorn[standard]==0.30.6
@@ -216,31 +228,15 @@ pydantic==2.9.2
 pillow==10.4.0
 python-dotenv==1.0.1
 requests==2.32.3
-🤝 Contributing
-Fork the repository
+```
 
-Create feature branch: git checkout -b feature/amazing-feature
-
-Commit changes: git commit -m "Add amazing feature"
-
-Push: git push origin feature/amazing-feature
-
-Open Pull Request
-
-📄 License
-MIT License - Free for commercial & personal use!
-
-👥 Author
-batman mylearn
-Location: Bengaluru, Karnataka, India
-
-📞 Support
-🐛 Bug Reports: GitHub Issues
-
-💬 Feature Requests: GitHub Discussions
-
-🚀 Showcase: Tag us on social media!
-
-<div align="center"> <img src="https://img.shields.io/badge/Streamlit-FastAPI-Gemini-FF4B4B?style=for-the-badge&logo=Streamlit&logoColor=white"> <br><br> <strong>⭐ Star us on GitHub if this powers your project!</strong> </div>
-Built with ❤️ in Bengaluru for modern AI developers
-
+# .env
+```
+GOOGLE_API_KEY="your-api-key"
+GOOGLE_GEMINI_API_KEY="your-api-key"
+GEMINI_API_KEY="your-api-key"
+REDIS_URL=redis://localhost:6379
+REDIS_DB=0
+LOG_LEVEL=INFO
+A2A_CHANNEL=booking_a2a
+```
