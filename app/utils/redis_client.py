@@ -1,9 +1,13 @@
-import redis.asyncio as redis
 import json
-import logging
 from datetime import datetime
 from typing import List, Dict, Any
-from .logger import logger
+
+import redis.asyncio as redis
+
+from .logger import get_logger, log_context
+
+
+logger = get_logger(__name__)
 
 
 class RedisClient:
@@ -25,12 +29,47 @@ class RedisClient:
             "timestamp": datetime.utcnow().isoformat(),
             "agent_id": agent_id,
             "event_type": event_type,
-            "data": data
+            "data": data,
         }
 
         await self.client.lpush(f"events:{agent_id}", json.dumps(event))
         await self.client.ltrim(f"events:{agent_id}", 0, 999)
-        logger.info(f"Logged {event_type} for {agent_id}")
+
+        session_id = None
+        if isinstance(data, dict):
+            session_id = data.get("session_id")
+
+        with log_context(session_id=session_id, agent=agent_id):
+            logger.info(
+                "Logged event",
+                extra={"extra_fields": {"event_type": event_type}},
+            )
+
+    async def log_chat(
+        self,
+        session_id: str,
+        role: str,
+        content: str,
+        agent: str | None = None,
+        data: Any | None = None,
+    ) -> None:
+        if not self.client:
+            await self.connect()
+
+        chat_item = {
+            "timestamp": datetime.utcnow().isoformat(),
+            "session_id": session_id,
+            "role": role,
+            "content": content,
+            "agent": agent,
+            "data": data,
+        }
+
+        await self.client.rpush(f"chat:{session_id}", json.dumps(chat_item))
+        await self.client.ltrim(f"chat:{session_id}", 0, 499)
+
+        with log_context(session_id=session_id, agent=agent or "-"):
+            logger.info("Logged chat", extra={"extra_fields": {"role": role}})
 
     async def get_events(self, agent_id: str, count: int = 50) -> List[Dict]:
         if not self.client:
@@ -42,7 +81,7 @@ class RedisClient:
         if not self.client:
             await self.connect()
         await self.client.publish(channel, json.dumps(message))
-        logger.info(f"A2A published to {channel}")
+        logger.info("A2A published to %s", channel)
 
     async def subscribe_a2a(self, channel: str):
         if not self.client:

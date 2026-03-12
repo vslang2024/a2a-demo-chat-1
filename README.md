@@ -1,12 +1,12 @@
-# A2A Travel Booking System (LangGraph + Redis Streams + SSE)
+# A2A Travel Booking System (LangGraph + Redis Pub/Sub + SSE)
 
 ## 📌 Overview
 
 This project demonstrates an Agent-to-Agent (A2A) travel booking system built with:
 
 - **FastAPI** (microservices)
-- **LangGraph** (orchestration layer)
-- **Redis Streams** (persistent event storage)
+- **LangGraph** (agent logic)
+- **Redis Pub/Sub + Lists** (A2A messaging + session events)
 - **Server-Sent Events (SSE)** (real-time streaming)
 - **Streamlit** (frontend UI)
 - **Google Gemini** (LLM-powered agents)
@@ -15,8 +15,9 @@ The system orchestrates:
 
 1. ✈️ Flight Agent
 2. 🏨 Hotel Agent
+3. 🌤️ Weather Agent (MCP server)
 
-The Booking Orchestrator coordinates both agents, streams live updates via SSE, and persists all events in Redis.
+The Booking Client sends A2A messages, an in-app A2A dispatcher runs the agents, SSE streams live updates, and Redis stores session events.
 
 ---
 
@@ -27,26 +28,24 @@ Streamlit UI
       ↓
 Booking Server (FastAPI + SSE)
       ↓
-LangGraph Orchestrator
+Booking Client (A2A send)
       ↓
-Flight Agent (FastAPI)
+Redis Pub/Sub (A2A messages)
       ↓
-Hotel Agent (FastAPI)
+A2A Dispatcher (in-app)
       ↓
-Redis Streams (Persistent Events)
+Flight / Hotel / Weather Agents
+      ↓
+Redis Lists (session events)
 ```
 
 ### Event Flow
 
 1. User submits booking request.
 2. Booking server creates a session_id.
-3. LangGraph invokes Flight → then Hotel.
-4. Each agent publishes events to Redis Stream:
-   - info
-   - result
-   - error
-   - final
-5. SSE endpoint streams live events to Streamlit.
+3. Booking Client publishes A2A messages for agents.
+4. A2A Dispatcher runs agents and writes session events to Redis.
+5. SSE endpoint streams those events to Streamlit.
 
 ---
 
@@ -54,20 +53,22 @@ Redis Streams (Persistent Events)
 
 ```
 .
-booking-agent-app/
+a2a-demo-chat-1/
 ├── app/
 │   ├── __init__.py
 │   ├── main.py                 # FastAPI server
+│   ├── a2a_runtime.py           # A2A dispatcher
 │   ├── agents/
 │   │   ├── __init__.py
 │   │   ├── flight_agent.py
 │   │   ├── hotel_agent.py
+│   │   ├── weather_agent.py
 │   │   ├── booking_client.py
-│   │   └── agent_cards.py
 │   ├── executors/
 │   │   ├── __init__.py
 │   │   ├── flight_agent_executor.py
 │   │   └── hotel_agent_executor.py
+│   │   └── weather_agent_executor.py
 │   ├── graph/
 │   │   ├── __init__.py
 │   │   └── booking_graph.py
@@ -81,9 +82,9 @@ booking-agent-app/
 │       └── schemas.py
 ├── streamlit_ui.py
 ├── requirements.txt
-├── .env.example
-├── .env
-├── app.log (generated)
+├── run.sh
+├── logs/
+│   └── app.log (generated)
 └── README.md
 
 
@@ -94,25 +95,45 @@ booking-agent-app/
 
 ## requirements.txt
 ```
-fastapi==0.115.0
-uvicorn[standard]==0.32.0
-streamlit==1.38.0
-langgraph==0.2.20
-langchain-google-genai==2.0.0
-redis==5.2.1
-pydantic==2.9.2
-python-dotenv==1.0.1
-httpx==0.27.0
-sse-starlette==2.1.2
-asyncio-mqtt==0.16.1
+fastapi
+uvicorn[standard]
+streamlit
+langgraph
+langchain
+langchain-core
+langchain-google-genai
+google-generativeai
+redis
+sse-starlette
+python-multipart
+python-dotenv
+httpx
+mcp
 ```
 
 ## .env
 ```
-GOOGLE_API_KEY=your_gemini_api_key_here
+GEMINI_API_KEY=your_gemini_api_key_here
 REDIS_URL=redis://localhost:6379
 REDIS_DB=0
 LOG_LEVEL=INFO
+```
+
+## Weather Agent (MCP, no API key)
+
+This project uses a local MCP weather server that relies on Open-Meteo and does not require an API key.
+
+Install and run the MCP server:
+
+```bash
+python -m pip install mcp_weather_server
+python -m mcp_weather_server --mode streamable-http --host 0.0.0.0 --port 8080
+```
+
+Optional env var (default shown):
+
+```
+MCP_WEATHER_URL=http://localhost:8080/mcp
 ```
 
 
@@ -121,7 +142,7 @@ LOG_LEVEL=INFO
 ## 1️⃣ Install Dependencies
 
 ```bash
-pip install fastapi uvicorn redis langgraph streamlit httpx python-dotenv google-generativeai sseclient
+pip install -r requirements.txt
 ```
 
 ---
@@ -147,35 +168,29 @@ docker run -p 6379:6379 redis
 Create a `.env` file:
 
 ```
-GOOGLE_API_KEY=your_gemini_api_key
+GEMINI_API_KEY=your_gemini_api_key
 REDIS_URL=redis://localhost:6379
-FLIGHT_AGENT_URL=http://localhost:8001
-HOTEL_AGENT_URL=http://localhost:8002
+MCP_WEATHER_URL=http://localhost:8080/mcp
 ```
 
 ---
 
 # 🚀 Running the Services
 
-## Start Flight Agent
+## 1️⃣ Start MCP Weather Server
 
 ```bash
-uvicorn agents:app --port 8001 --reload
+python -m pip install mcp_weather_server
+python -m mcp_weather_server --mode streamable-http --host 0.0.0.0 --port 8080
 ```
 
-## Start Hotel Agent
+## 2️⃣ Start API
 
 ```bash
-uvicorn hotel_agent:app --port 8002 --reload
+python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-## Start Booking Orchestrator
-
-```bash
-uvicorn booking_server:app --port 8000 --reload
-```
-
-## Start Streamlit UI
+## 3️⃣ Start Streamlit UI
 
 ```bash
 streamlit run streamlit_ui.py
@@ -185,7 +200,7 @@ streamlit run streamlit_ui.py
 
 # 🔄 API Endpoints
 
-## POST /book
+## POST /booking/start
 
 Triggers booking workflow.
 
@@ -193,11 +208,12 @@ Request:
 
 ```json
 {
-  "from": "New York",
-  "to": "Paris",
+  "from_city": "New York",
+  "to_city": "Paris",
   "from_date": "2026-05-01",
   "to_date": "2026-05-10",
-  "budget": "3000"
+  "budget_min": 1000,
+  "budget_max": 3000
 }
 ```
 
@@ -211,7 +227,7 @@ Response:
 
 ---
 
-## GET /events/{session_id}
+## GET /sse/{session_id}
 
 Streams live booking updates via SSE.
 
@@ -223,23 +239,23 @@ text/event-stream
 
 ---
 
+## GET /redis/{session_id}
+
+Returns latest session data and events stored in Redis.
+
+---
+
 # 🧠 Key Concepts
 
-## Redis Streams (Persistent Events)
+## Redis Pub/Sub + Lists
 
-Each session writes to:
+A2A uses pub/sub on `booking_a2a`, and session events are appended to:
 
 ```
-session:{session_id}
+events:{session_id}
 ```
 
-Events are stored using `XADD` and streamed using `XREAD`.
-
-Benefits:
-
-- Durable event history
-- Replay capability
-- Scalable event architecture
+SSE streams the list to the UI.
 
 ---
 
@@ -472,3 +488,15 @@ text
 docker-compose up -d
 
 
+
+---
+
+## Logging (optional)
+
+```
+LOG_LEVEL=INFO
+LOG_JSON=false
+LOG_DIR=logs
+LOG_MAX_BYTES=10485760
+LOG_BACKUP_COUNT=5
+```
